@@ -12,8 +12,13 @@ sbatch*
 casper/__pycache__
 data/processed_questions/dataset_with_prompt/
 data/processed_questions/TrustGPT/social-chem-101.json
+data/processed_questions/TrustGPT/social-chem-101_3w_1.json
 prompt_intervention/
 results/
 prompt_intervention/
+bias_detection/
+finetuning/
+jailbreak_detection/
+outputs*
 
 
