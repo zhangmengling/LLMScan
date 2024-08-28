@@ -1,0 +1,16 @@
+.env
+venv
+__pycache__
+.idea
+.DS_Store
+*.egg-info
+.vscode
+
+*.out
+imgs/
+sbatch*
+casper/__pycache__
+data/dataset_with_prompt/
+prompt_intervention/
+results/
+

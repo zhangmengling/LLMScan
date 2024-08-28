@@ -1,0 +1,10 @@
+{
+"model_path": "meta-llama/",
+"model_name": "Llama-2-7b-chat-hf",
+  "task": "bias",
+  "if_causality_analysis": false,
+  "if_detect": true,
+  "dataset": "BBQ(category='gender')",
+  "target": "layer", 
+  "saving_dir": "outputs_bias/llama-2-7b/"
+}
