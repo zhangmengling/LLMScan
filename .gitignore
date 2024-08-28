@@ -10,7 +10,10 @@ __pycache__
 imgs/
 sbatch*
 casper/__pycache__
-data/dataset_with_prompt/
+data/processed_questions/dataset_with_prompt/
+data/processed_questions/TrustGPT/social-chem-101.json
 prompt_intervention/
 results/
+prompt_intervention/
+
 
