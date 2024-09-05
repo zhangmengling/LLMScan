@@ -2,7 +2,7 @@
 Author: error: error: git config user.name & please set dead value or install git && error: git config user.email & please set dead value or install git & please set dead value or install git
 Date: 2024-03-13 21:33:22
 LastEditors: zhangmengling zhangmengdi1997@126.com
-LastEditTime: 2024-08-07 22:56:17
+LastEditTime: 2024-09-04 21:46:43
 FilePath: /mengdizhang/CASPER/demo.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -198,40 +198,6 @@ def trace_with_patch_layer(
         if layer not in layers:
             return x
         
-        # # 打印 tuple 中的每个元素
-        # for i, element in enumerate(x):
-        #     print(f"Element {i}: {type(element)}")
-
-        # ----for updated transformers----
-        # print("-->x", type(x), len(x))
-        # print("-->x[0]", type(x[0]), x[0].shape)
-        # print("-->x[1]", type(x[1]))
-        
-        # print("-->x[1]")
-        # for i, element in enumerate(x[1]):  # only contain x[1][0]
-        #     print(f"Element {i}: {type(element)}")
-
-        # print("-->x[1][0]")
-        # for i, element in enumerate(x[1][0]):
-        #     print(f"Element {i}: {type(element)}, {element.shape}")
-
-        # print("-->x[1][0][0]")
-        # for i, element in enumerate(x[1][0][0]):
-        #     print(f"Element {i}: {type(element)}, {element.shape}")
-
-        # ----for old transformers----
-        # print("-->x[0]", type(x[0]), x[0].shape)
-        # print("-->x[1]", type(x[1]), len(x[1]))
-
-        # print("-->x[1]")
-        # for i, element in enumerate(x[1]):  
-        #     print(f"Element {i}: {type(element)}, {element.shape}")
-
-        # print("-->x[1][0]")
-        # for i, element in enumerate(x[1][0]):
-        #     print(f"Element {i}: {type(element)}, {element.shape}")
-
-        
         if layer == layers[0]:
             inter_results["hidden_states"] = x[0].cpu()
             inter_results["attention_mask"] = x[1][0].cpu()
@@ -326,7 +292,6 @@ def trace_with_patch_layer(
     return probs
 
 
-
 def analyse_based_on_layer(prompt, mt):
     """
     prompt:
@@ -339,6 +304,7 @@ def analyse_based_on_layer(prompt, mt):
     answer = generate_outputs(prompt, mt, )
     if isinstance(answer, list):
         answer = answer[0]
+    # print("-->answer", answer)
 
     if "*out loud*" in answer:
         select_answer = extract_new_prompt(answer)
@@ -351,7 +317,7 @@ def analyse_based_on_layer(prompt, mt):
     [first_token] = decode_tokens(mt.tokenizer, [asnwer_t])
     # print("-->first_token:", first_token)
 
-    '''
+    # '''
     model = mt.model
     result_prob = []
     for layer in range(10, mt.num_layers - 1): 
@@ -361,7 +327,7 @@ def analyse_based_on_layer(prompt, mt):
     # Convert tensors to a list of numbers
     data_on_cpu = [abs(x.item() - logits.item()) for x in result_prob]
     # Create a list of indices for x-axis
-    '''
+    # '''
     data_on_cpu = None
     return logits.item(), data_on_cpu, answer
 
@@ -1918,6 +1884,15 @@ if __name__ == '__main__':
     )
     mt.model
     print("-->Model loading successfully")
+
+    # datasets = [Questions1000(), WikiData(), Commonsense2(), TatoebaFreToEng(), TatoebaEngToFre(),
+    #         Sciq(), MathematicalProblems(), AnthropicAwarenessAI(), AnthropicAwarenessArchitecture(),
+    #         AnthropicAwarenessNNArchitecture()]
+
+    dataset = MathematicalProblems()
+    print("-->columns", list(dataset.columns))
+
+    sys.exit()
 
 
     # prompt = "Who developed Windows95?"
