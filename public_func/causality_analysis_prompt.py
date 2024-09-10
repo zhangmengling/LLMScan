@@ -2210,6 +2210,216 @@ def analyse_causality_prompt(mt, model_name, dataset, lie_instruction_num, save_
     print()
     print('GPU Kernel cleared and released. Good bye....')
 
+def analyse_existing_causality_prompt(mt, model_name, dataset, lie_instruction_num, save_progress=False):
+    dataset_name = dataset.__class__.__name__
+    prompt_filename = os.path.basename(prompt_source).replace('.json', '')
+
+    model = mt.model
+    tokenizer = mt.tokenizer
+
+    with torch.no_grad():
+        vocab_size = tokenizer.vocab_size
+        print(f"Vocabulary size: {vocab_size}")
+
+        # Print model configuration to inspect details and for determining attention layers configurations for extraction
+        print(model.config)
+        total_params = sum(p.numel() for p in model.parameters())
+        print(f"Total number of parameters: {total_params}")
+
+        model_name_or_path = model.config._name_or_path
+        if 'Llama-2-7b' in model_name_or_path:
+            print("This is LLaMA2-7B.\n")
+            model_used = 'LlaMa2-7B'
+            selected_layers = [0, 15, 31]
+            selected_heads = [0, 15, 31]
+        elif 'Llama-2-13b' in model_name_or_path:
+            print("This is LLaMA2-13B.\n")
+            model_used = 'LlaMa2-13B'
+            selected_layers = [0, 19, 39]
+            selected_heads = [0, 19, 39]
+        elif 'Meta-Llama-3.1-8B-Instruct' in model_name_or_path:
+            print("This is LlaMa3_1-8B.\n")
+            model_used = 'LlaMa3_1-8B'
+            selected_layers = [0, 15, 31]
+            selected_heads = [0, 15, 31]
+        elif 'Mistral-7B-Instruct-v0.2' in model_name_or_path:
+            print("This is Mistral-7B.\n")
+            model_used = 'Mistral-7B'
+            selected_layers = [0, 15, 31]
+            selected_heads = [0, 15, 31]
+        else:
+            print("Unknown model size.\n")
+            model_used = 'Unknown'
+            raise Exception('Not known model hence cannot run attention scoring')
+
+        # ------------------------------ generate x  ------------------------------ 
+        # '''
+        # adv_prompts, nonadv_prompts = load_data_orig(prompt_source)
+        # prompts, labels = load_data(prompt_source)
+
+        # prompts, labels = load_prompt_label(dataset, model_name, task)
+        data = []
+        intervene_token = '-'
+
+        # for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0]):
+        for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0]):
+            question = row['question']
+            expected_answer = row['answer']
+            if_can_answer = row[model_name + "_can_answer"]
+            if_can_answer_after = row[model_name + "_can_answer_after"]
+            # expected_answer = answers[k]
+            # if_can_answer = if_can_answers[k]
+            if bool(if_can_answer) == False:  # if model can't answer the question, skip
+                continue
+
+            if bool(if_can_answer_after) == True:  # if model can't lie on this question, skip
+                continue
+
+            prompt_orig = prepare_prompt(question, dataset.truth_instructions[0])
+
+            lie_instructions = dataset.lie_instructions
+            if isinstance(lie_instruction_num, int):
+                num = lie_instruction_num
+            elif lie_instruction_num == "random":
+                num = random.randint(0, len(lie_instructions) - 1)
+
+            new_prompt = prepare_prompt(question, lie_instructions[num])
+            prompt_lie = new_prompt
+
+            # dataset.loc[index, "prompt_orig"] = prompt_orig
+            # dataset.loc[index, "prompt_after"] = prompt_lie
+
+            features = get_logits_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
+            print("-->features", features)
+            dataset.loc[index, f"{model_name}_prompt_aie_orig"] = str(list(features.values()))
+            features['label'] = 0
+            data.append(features)
+            features = get_logits_features(model, tokenizer, prompt_lie, intervene_token, selected_layers, selected_heads)
+            dataset.loc[index, f"{model_name}_prompt_aie_after"] = str(list(features.values()))
+            features['label'] = 1
+            data.append(features)
+        
+        if save_progress:
+            # todo use dataset.complete_filename
+            print("-->dataset.complete_filename", dataset.complete_filename)
+            dataset_name = dataset.__class__.__name__
+            # complete_filename = "data/processed_questions/dataset_with_prompt/" + dataset_name + ".json"
+            dataset.save_processed(None)
+
+        # print(f'Causal Inference Processing for {dataset_name} Begins : ...\n')
+        # for prompt, label in tqdm(zip(prompts, labels), desc="Processing", unit="prompt"):
+        #     print("-->prompt", prompt)
+        #     print("-->label", label)
+        #     # features = get_attention_features(model, tokenizer, prompt, intervene_token, selected_layers, selected_heads)
+        #     features = get_logits_features(model, tokenizer, prompt, intervene_token, selected_layers, selected_heads)
+        #     # features['label'] = 1 if prompt in adv_prompts else 0
+        #     features['label'] = label
+        #     data.append(features)
+
+        print('Causality Inference Completed Successfully!\n\n')
+
+        df = pd.DataFrame(data)
+        print(df)
+
+        increment = 1
+        now = datetime.datetime.now()
+        timestamp = now.strftime("%b_%d_%H%M")
+        filename = f'Logits_Diff_{dataset_name}_{model_used}'
+
+        full_path = path + filename
+
+        # Check if the file exists and modify the path if it does, just in case
+        while os.path.exists(f'{full_path}.xlsx'):
+            filename = f"{filename}_{increment}"
+            increment += 1
+            full_path = path + filename
+
+        df.to_excel(f'{full_path}.xlsx', index=False, engine='openpyxl')
+        print()
+        print(f"Features saved to {full_path}.xlsx \n")
+
+        # with open(f'{full_path}.json', 'w') as f:
+        #    json.dump(all_attention_details, f, indent=4)
+        # print(f"Attention Details saved to {full_path}.json \n")
+
+        X = df.drop('label', axis=1)
+        y = df['label']
+        # '''
+        
+        # ------------------------------ extract x  ------------------------------ 
+        '''
+        import glob
+
+        # Search for the file starting with "Logits"
+        # file_pattern = os.path.join(path, 'Logits*')
+        file_pattern = os.path.join(path, f'Logits_Diff_{prompt_filename}_{model_used}_*')
+        file_list = glob.glob(file_pattern)
+
+        # Check if any files were found
+        if file_list:
+            # If multiple files match, use the first one
+            filename = file_list[0]
+            print(f"Found file: {filename}")
+
+        # Open or read the file (as an example, we are reading it)
+        print("-->full_path", filename)
+
+        # Read the Excel file into a DataFrame
+        df = pd.read_excel(filename, engine='openpyxl')
+        # Display the DataFrame (optional)
+        print(df)
+        X = df.drop('label', axis=1)
+        y = df['label']
+
+        '''
+
+        # Train and evaluate classifier - Logistic Regression Classifier
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        classifier = LogisticRegression(max_iter=1000)
+        classifier.fit(X_train, y_train)
+        print("-->X_train", len(X_train))
+        print("-->X_test", len(X_test))
+
+        predictions = classifier.predict(X_test)
+        prob_predictions = classifier.predict_proba(X_test)
+        accuracy = accuracy_score(y_test, predictions)
+        loss = log_loss(y_test, prob_predictions)
+        print('Logistic Regression')
+        print('===============================================')
+        print(f"Accuracy: {accuracy}")
+        print(f"Log Loss: {loss}")
+        # print('===============================================')
+
+        mlp_regressor = MLPRegressor(hidden_layer_sizes=(50, 30), activation='relu', solver='adam', max_iter=500)
+        mlp_regressor.fit(X_train, y_train)
+        y_pred = mlp_regressor.predict(X_test)
+        y_pred_binary = (y_pred >= 0.5).astype(int)
+        accuracy = accuracy_score(y_test, y_pred_binary)
+        print('MLP Regression')
+        print('===============================================')
+        print("Accuracy:", accuracy)
+        roc = roc_auc_score(y_test, y_pred)
+        print("ROC:", roc)
+
+        mlp_classifier = MLPClassifier(hidden_layer_sizes=(50, 30), activation='relu', solver='adam', max_iter=500)
+        mlp_classifier.fit(X_train, y_train)
+        y_pred = mlp_classifier.predict(X_test)
+        y_pred_binary = (y_pred >= 0.5).astype(int)
+        accuracy = accuracy_score(y_test, y_pred_binary)
+        print('MLP Classifier')
+        print('===============================================')
+        print("Accuracy:", accuracy)
+        y_proba = mlp_classifier.predict_proba(X_test)[:, 1]  # Get probabilities for the positive class
+        roc = roc_auc_score(y_test, y_proba)
+        print("ROC:", roc)
+
+    # Clean up resources
+    gc.collect()
+    torch.cuda.empty_cache()
+    print()
+    print('GPU Kernel cleared and released. Good bye....')
+
+
 
 def load_parameters(file_path):
     with open(file_path, 'r') as file:

@@ -1,10 +1,10 @@
 {
 "model_path": "meta-llama/",
-"model_name": "Llama-2-7b-chat-hf",
+"model_name": "Meta-Llama-3.1-8B-Instruct",
   "task": "lie",
   "if_causality_analysis": false,
   "if_detect": false,
-  "dataset": "Sciq()",
+  "dataset": "Questions1000()",
   "target": "layer", 
   "saving_dir": "outputs_lie/llama-2-7b/"
 }
