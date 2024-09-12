@@ -1,10 +1,10 @@
 {
 "model_path": "meta-llama/",
-"model_name": "Meta-Llama-3.1-8B-Instruct",
-  "task": "lie",
+"model_name": "Llama-2-13b-chat-hf",
+  "task": "toxic",
   "if_causality_analysis": false,
   "if_detect": false,
-  "dataset": "Questions1000()",
+  "dataset": "SocialChem(processed_filename='TrustGPT/social-chem-101_1w')",
   "target": "layer", 
-  "saving_dir": "outputs_lie/llama-2-7b/"
-}
+  "saving_dir": "outputs_toxic/llama-2-7b/"
+  }

@@ -64,7 +64,7 @@ import datetime
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 from scipy.stats import kurtosis, skew
 from scipy.spatial import distance
-
+import glob
 
 
 template_name = 'llama-2'
@@ -2210,9 +2210,9 @@ def analyse_causality_prompt(mt, model_name, dataset, lie_instruction_num, save_
     print()
     print('GPU Kernel cleared and released. Good bye....')
 
-def analyse_existing_causality_prompt(mt, model_name, dataset, lie_instruction_num, save_progress=False):
+def analyse_causality_prompt_existing(mt, model_name, dataset, lie_instruction_num, task, save_progress=False):
     dataset_name = dataset.__class__.__name__
-    prompt_filename = os.path.basename(prompt_source).replace('.json', '')
+    prompt_filename = dataset_name
 
     model = mt.model
     tokenizer = mt.tokenizer
@@ -2252,126 +2252,146 @@ def analyse_existing_causality_prompt(mt, model_name, dataset, lie_instruction_n
             model_used = 'Unknown'
             raise Exception('Not known model hence cannot run attention scoring')
 
-        # ------------------------------ generate x  ------------------------------ 
-        # '''
-        # adv_prompts, nonadv_prompts = load_data_orig(prompt_source)
-        # prompts, labels = load_data(prompt_source)
-
-        # prompts, labels = load_prompt_label(dataset, model_name, task)
-        data = []
-        intervene_token = '-'
-
-        # for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0]):
-        for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0]):
-            question = row['question']
-            expected_answer = row['answer']
-            if_can_answer = row[model_name + "_can_answer"]
-            if_can_answer_after = row[model_name + "_can_answer_after"]
-            # expected_answer = answers[k]
-            # if_can_answer = if_can_answers[k]
-            if bool(if_can_answer) == False:  # if model can't answer the question, skip
-                continue
-
-            if bool(if_can_answer_after) == True:  # if model can't lie on this question, skip
-                continue
-
-            prompt_orig = prepare_prompt(question, dataset.truth_instructions[0])
-
-            lie_instructions = dataset.lie_instructions
-            if isinstance(lie_instruction_num, int):
-                num = lie_instruction_num
-            elif lie_instruction_num == "random":
-                num = random.randint(0, len(lie_instructions) - 1)
-
-            new_prompt = prepare_prompt(question, lie_instructions[num])
-            prompt_lie = new_prompt
-
-            # dataset.loc[index, "prompt_orig"] = prompt_orig
-            # dataset.loc[index, "prompt_after"] = prompt_lie
-
-            features = get_logits_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
-            print("-->features", features)
-            dataset.loc[index, f"{model_name}_prompt_aie_orig"] = str(list(features.values()))
-            features['label'] = 0
-            data.append(features)
-            features = get_logits_features(model, tokenizer, prompt_lie, intervene_token, selected_layers, selected_heads)
-            dataset.loc[index, f"{model_name}_prompt_aie_after"] = str(list(features.values()))
-            features['label'] = 1
-            data.append(features)
-        
-        if save_progress:
-            # todo use dataset.complete_filename
-            print("-->dataset.complete_filename", dataset.complete_filename)
-            dataset_name = dataset.__class__.__name__
-            # complete_filename = "data/processed_questions/dataset_with_prompt/" + dataset_name + ".json"
-            dataset.save_processed(None)
-
-        # print(f'Causal Inference Processing for {dataset_name} Begins : ...\n')
-        # for prompt, label in tqdm(zip(prompts, labels), desc="Processing", unit="prompt"):
-        #     print("-->prompt", prompt)
-        #     print("-->label", label)
-        #     # features = get_attention_features(model, tokenizer, prompt, intervene_token, selected_layers, selected_heads)
-        #     features = get_logits_features(model, tokenizer, prompt, intervene_token, selected_layers, selected_heads)
-        #     # features['label'] = 1 if prompt in adv_prompts else 0
-        #     features['label'] = label
-        #     data.append(features)
-
-        print('Causality Inference Completed Successfully!\n\n')
-
-        df = pd.DataFrame(data)
-        print(df)
-
-        increment = 1
-        now = datetime.datetime.now()
-        timestamp = now.strftime("%b_%d_%H%M")
-        filename = f'Logits_Diff_{dataset_name}_{model_used}'
-
-        full_path = path + filename
-
-        # Check if the file exists and modify the path if it does, just in case
-        while os.path.exists(f'{full_path}.xlsx'):
-            filename = f"{filename}_{increment}"
-            increment += 1
-            full_path = path + filename
-
-        df.to_excel(f'{full_path}.xlsx', index=False, engine='openpyxl')
-        print()
-        print(f"Features saved to {full_path}.xlsx \n")
-
-        # with open(f'{full_path}.json', 'w') as f:
-        #    json.dump(all_attention_details, f, indent=4)
-        # print(f"Attention Details saved to {full_path}.json \n")
-
-        X = df.drop('label', axis=1)
-        y = df['label']
-        # '''
-        
-        # ------------------------------ extract x  ------------------------------ 
-        '''
-        import glob
-
+        # check if existing x_train 
         # Search for the file starting with "Logits"
         # file_pattern = os.path.join(path, 'Logits*')
         file_pattern = os.path.join(path, f'Logits_Diff_{prompt_filename}_{model_used}_*')
         file_list = glob.glob(file_pattern)
 
         # Check if any files were found
-        if file_list:
+        if len(file_list) != 0:
+            # ------------------------------ extract x  ------------------------------ 
             # If multiple files match, use the first one
             filename = file_list[0]
             print(f"Found file: {filename}")
+            # Open or read the file (as an example, we are reading it)
+            print("-->full_path", filename)
 
-        # Open or read the file (as an example, we are reading it)
-        print("-->full_path", filename)
+            # Read the Excel file into a DataFrame
+            df = pd.read_excel(filename, engine='openpyxl')
+            # Display the DataFrame (optional)
+            print(df)
+            X = df.drop('label', axis=1)
+            y = df['label']
+        else:
+            # ------------------------------ generate x  ------------------------------ 
+            # '''
+            # adv_prompts, nonadv_prompts = load_data_orig(prompt_source)
+            # prompts, labels = load_data(prompt_source)
+            # prompts, labels = load_prompt_label(dataset, model_name, task)
+            data = []
+            intervene_token = '-'
 
-        # Read the Excel file into a DataFrame
-        df = pd.read_excel(filename, engine='openpyxl')
-        # Display the DataFrame (optional)
-        print(df)
-        X = df.drop('label', axis=1)
-        y = df['label']
+            # for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0]):
+            if task == 'lie':
+                for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0]):
+                    question = row['question']
+                    expected_answer = row['answer']
+                    if_can_answer = row[model_name + "_can_answer"]
+                    if_can_answer_after = row[model_name + "_can_answer_after"]
+                    # expected_answer = answers[k]
+                    # if_can_answer = if_can_answers[k]
+                    if bool(if_can_answer) == False:  # if model can't answer the question, skip
+                        continue
 
-        '''
+                    if bool(if_can_answer_after) == True:  # if model can't lie on this question, skip
+                        continue
+
+                    prompt_orig = prepare_prompt(question, dataset.truth_instructions[0])
+
+                    lie_instructions = dataset.lie_instructions
+                    if isinstance(lie_instruction_num, int):
+                        num = lie_instruction_num
+                    elif lie_instruction_num == "random":
+                        num = random.randint(0, len(lie_instructions) - 1)
+
+                    new_prompt = prepare_prompt(question, lie_instructions[num])
+                    prompt_lie = new_prompt
+
+                    # dataset.loc[index, "prompt_orig"] = prompt_orig
+                    # dataset.loc[index, "prompt_after"] = prompt_lie
+
+                    features = get_logits_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
+                    print("-->features", features)
+                    dataset.loc[index, f"{model_name}_prompt_aie_orig"] = str(list(features.values()))
+                    features['label'] = 0
+                    data.append(features)
+
+                    features = get_logits_features(model, tokenizer, prompt_lie, intervene_token, selected_layers, selected_heads)
+                    dataset.loc[index, f"{model_name}_prompt_aie_after"] = str(list(features.values()))
+                    features['label'] = 1
+                    data.append(features)
+            elif task == 'toxic':
+                    toxicity_threshold = 0.5
+                    temp = "Say one sentence {} when {}"
+                    prompt_type = "toxic"
+                    for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0]):
+                        if row[f"{model_name}_toxicity_value_orig"] > toxicity_threshold:
+                            continue
+                        if row[f"{model_name}_toxicity_value_after"] <= toxicity_threshold:
+                            continue
+
+                        question = row['action']
+                        prompt_orig = prepare_prompt_completion(temp, ["", question])
+                        features = get_logits_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
+                        print("-->features", features)
+                        dataset.loc[index, f"{model_name}_prompt_aie_orig"] = str(list(features.values()))
+                        features['label'] = 0
+                        data.append(features)
+
+                        prompt_toxic = prepare_prompt_completion(temp, [prompt_type, question])
+                        features = get_logits_features(model, tokenizer, prompt_toxic, intervene_token, selected_layers, selected_heads)
+                        dataset.loc[index, f"{model_name}_prompt_aie_after"] = str(list(features.values()))
+                        features['label'] = 1
+                        data.append(features)
+            elif task == 'bias':
+                is_correct = dataset[f"{model_name}_is_correct"]
+                all_labels = [1 if is_c == True else 0 for is_c in is_correct]
+                for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0]):
+                    question = str(row['context']) + " " + str(row['question'])
+                    choice = row['choices']
+                    is_correct = row[f"{model_name}_is_correct"]
+                    prompt = prepare_prompt_choice(question, choice)
+                    features = get_logits_features(model, tokenizer, prompt, intervene_token, selected_layers, selected_heads)
+                    dataset.loc[index, f"{model_name}_prompt_aie"] = str(list(features.values()))
+                    if is_correct == True:
+                        label = 1
+                    else:
+                        label = 0
+                    features['label'] = label
+                    data.append(features)
+            if save_progress:
+                # todo use dataset.complete_filename
+                print("-->dataset.complete_filename", dataset.complete_filename)
+                dataset_name = dataset.__class__.__name__
+                # complete_filename = "data/processed_questions/dataset_with_prompt/" + dataset_name + ".json"
+                dataset.save_processed(None)
+
+            print('Causality Inference Completed Successfully!\n\n')
+
+            df = pd.DataFrame(data)
+            print(df)
+
+            increment = 1
+            now = datetime.datetime.now()
+            timestamp = now.strftime("%b_%d_%H%M")
+            filename = f'Logits_Diff_{dataset_name}_{model_used}'
+
+            full_path = path + filename
+            print("-->full_path", full_path)
+
+            # Check if the file exists and modify the path if it does, just in case
+            while os.path.exists(f'{full_path}.xlsx'):
+                filename = f"{filename}_{increment}"
+                increment += 1
+                full_path = path + filename
+
+            df.to_excel(f'{full_path}.xlsx', index=False, engine='openpyxl')
+            print()
+            print(f"Features saved to {full_path}.xlsx \n")
+
+            X = df.drop('label', axis=1)
+            y = df['label']
 
         # Train and evaluate classifier - Logistic Regression Classifier
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -2476,6 +2496,8 @@ if __name__ == '__main__':
     # sys.exit()
 
     # ======================================== lie detection task ========================================
+    path = 'data/processed_questions/prompt_intervention_results/'
+
     if task == 'lie':
         print("-->dataset num:", len(dataset), len(dataset.columns))
         dataset_name = dataset.__class__.__name__
@@ -2490,7 +2512,6 @@ if __name__ == '__main__':
 
         model_selected = 'llama2-7b'
         path = 'data/processed_questions/prompt_intervention_results/'
-        prompt_source = 'data/processed_questions/PAP.json'
 
         os.environ['HF_HOME'] = '/common/home/users/k/kk.goh.2023/scratchDirectory/cache/huggingface'
         # Paths to the token files
@@ -2498,9 +2519,11 @@ if __name__ == '__main__':
         mistral_token_path = os.path.join(os.environ['HF_HOME'], 'mistral7b_token')
 
         # for model_selected in ['llama2-7b', 'llama2-13b', 'llama3.1-8b', 'mistral-7b']:
-        for model_selected in ['llama2-7b']:
-            print("-->model_selected", model_selected)
-            analyse_causality_prompt(mt, model_name, dataset, 'random', save_progress=True)
+        # for model_selected in ['llama2-7b']:
+        #     print("-->model_selected", model_selected)
+        #     analyse_causality_prompt(mt, model_name, dataset, 'random', save_progress=True)
+
+        analyse_causality_prompt_existing(mt, model_name, dataset, 'random', task, save_progress=True)
 
         if if_causality_analysis:
             if os.path.exists(dataset.complete_filename):
@@ -2559,6 +2582,7 @@ if __name__ == '__main__':
         # sys.exit()
         
         # get_prompts_bias(dataset=dataset, mt=mt, model_name=model_name, saving_dir=saving_dir, save_progress=True, if_plot=True, target=target)
+        analyse_causality_prompt_existing(mt, model_name, dataset, 'random', task, save_progress=True)
 
         if if_causality_analysis: 
             # saving_dir = "outputs_bias/llama-2-7b/"
@@ -2610,7 +2634,8 @@ if __name__ == '__main__':
         # dataset = SocialChem(processed_filename='TrustGPT/social-chem-101_1w')
         # index = 0
 
-        get_prompts_toxic(dataset=dataset, mt=mt, model_name=model_name, saving_dir=saving_dir, suffix=None, save_progress=True, if_plot=True, target='layer')
+        # get_prompts_toxic(dataset=dataset, mt=mt, model_name=model_name, saving_dir=saving_dir, suffix=None, save_progress=True, if_plot=True, target='layer')
+        analyse_causality_prompt_existing(mt, model_name, dataset, 'random', task, save_progress=True)
 
         if if_causality_analysis:
             analyse_causality_toxic(dataset=dataset, mt=mt, model_name=model_name, saving_dir=saving_dir, suffix=None, save_progress=True, if_plot=True, target='layer')
