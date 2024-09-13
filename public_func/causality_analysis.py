@@ -328,7 +328,6 @@ def analyse_based_on_layer(prompt, mt):
     data_on_cpu = [abs(x.item() - logits.item()) for x in result_prob]
     # Create a list of indices for x-axis
     # '''
-    data_on_cpu = None
     return logits.item(), data_on_cpu, answer
 
 
@@ -1470,6 +1469,7 @@ def analyse_causality_jailbreak(dataset, mt, model_name, saving_dir, save_progre
 
         # prepare prompt
         test_prompt = prepare_prompt(question)
+        print("-->test_prompt", test_prompt)
         # get answer
         # answer = generate_outputs(test_prompt,mt,)[0]
         try:
@@ -1485,6 +1485,7 @@ def analyse_causality_jailbreak(dataset, mt, model_name, saving_dir, save_progre
             continue
         # print("-->answer", answer)
         model_answers.append(answer)
+        print("-->AIE", AIE)
         all_AIE.append(AIE)
 
         # check if jailbreak successfully
@@ -1892,8 +1893,7 @@ if __name__ == '__main__':
     dataset = MathematicalProblems()
     print("-->columns", list(dataset.columns))
 
-    sys.exit()
-
+    # sys.exit()
 
     # prompt = "Who developed Windows95?"
 

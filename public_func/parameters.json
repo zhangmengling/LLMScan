@@ -1,10 +1,10 @@
 {
 "model_path": "meta-llama/",
-"model_name": "Llama-2-13b-chat-hf",
-  "task": "toxic",
-  "if_causality_analysis": false,
+"model_name": "Meta-Llama-3.1-8B-Instruct",
+  "task": "jailbreak",
+  "if_causality_analysis": true,
   "if_detect": false,
-  "dataset": "SocialChem(processed_filename='TrustGPT/social-chem-101_1w')",
+  "dataset": "GCG()",
   "target": "layer", 
-  "saving_dir": "outputs_toxic/llama-2-7b/"
+  "saving_dir": "outputs_jailbreak/llama-3/"
   }

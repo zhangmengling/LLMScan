@@ -117,10 +117,10 @@ def predict_from_input(model, inp):
     """
     torch.cuda.empty_cache()
     out = model(**inp)["logits"]
-    print("-->out", out.shape)
+    # print("-->out", out.shape)
     # probability distribution over the vocabvulary (on the last token predicted in each sequence) 
     probs = torch.softmax(out[:, -1], dim=1)
-    print("-->probs", probs.shape)
+    # print("-->probs", probs.shape)
     p, preds = torch.max(probs, dim=1)
     return preds, p
 

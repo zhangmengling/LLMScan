@@ -1437,7 +1437,7 @@ def analyse_causality_jailbreak(dataset, mt, model_name, saving_dir, save_progre
         dataset_name = dataset.__class__.__name__
 
         ########## plot orig AIE and lie instructed AIE##########
-        saving_path = saving_dir + str(dataset_name) + "/"
+        saving_path = saving_dir + str(dfataset_name) + "/"
         if not os.path.exists(saving_path):
             os.makedirs(saving_path)
         saving_file_name = saving_path + target + "_adv.pdf"
@@ -2684,7 +2684,8 @@ if __name__ == '__main__':
         dataset = eval(parameters['dataset'])
         print("-->dataset num:", len(dataset), len(dataset.columns))
         dataset_name = dataset.__class__.__name__
-        print("-->dataset.columns", dataset.columns)
+        # print("-->dataset.columns", dataset.columns)
+        print("-->if_causality_analysis", if_causality_analysis)
 
         if if_causality_analysis:
             # saving_dir = "outputs_jailbreak/llama-2-7b/"
