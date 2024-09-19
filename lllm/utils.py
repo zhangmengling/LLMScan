@@ -19,7 +19,6 @@ from tenacity import (
 # Maximum number of tokens that the openai api allows me to request per minute
 RATE_LIMIT = 250000
 
-
 # To avoid rate limits, we use exponential backoff where we wait longer and longer
 # between requests whenever we hit a rate limit. Explanation can be found here:
 # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_handle_rate_limits.ipynb

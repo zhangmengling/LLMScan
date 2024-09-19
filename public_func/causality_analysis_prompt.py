@@ -2,7 +2,7 @@
 Author: error: error: git config user.name & please set dead value or install git && error: git config user.email & please set dead value or install git & please set dead value or install git
 Date: 2024-03-13 21:33:22
 LastEditors: zhangmengling zhangmengdi1997@126.com
-LastEditTime: 2024-09-06 00:08:23
+LastEditTime: 2024-09-16 19:04:20
 FilePath: /mengdizhang/CASPER/demo.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -2115,7 +2115,7 @@ def analyse_causality_prompt(mt, model_name, dataset, lie_instruction_num, save_
         increment = 1
         now = datetime.datetime.now()
         timestamp = now.strftime("%b_%d_%H%M")
-        filename = f'Logits_Diff_{dataset_name}_{model_used}'
+        filename = f'Attention_Dis_{dataset_name}_{model_used}'
 
         full_path = path + filename
 
@@ -2143,7 +2143,7 @@ def analyse_causality_prompt(mt, model_name, dataset, lie_instruction_num, save_
 
         # Search for the file starting with "Logits"
         # file_pattern = os.path.join(path, 'Logits*')
-        file_pattern = os.path.join(path, f'Logits_Diff_{prompt_filename}_{model_used}_*')
+        file_pattern = os.path.join(path, f'Attention_Dis_{prompt_filename}_{model_used}_*')
         file_list = glob.glob(file_pattern)
 
         # Check if any files were found
@@ -2255,7 +2255,7 @@ def analyse_causality_prompt_existing(mt, model_name, dataset, lie_instruction_n
         # check if existing x_train 
         # Search for the file starting with "Logits"
         # file_pattern = os.path.join(path, 'Logits*')
-        file_pattern = os.path.join(path, f'Logits_Diff_{prompt_filename}_{model_used}_*')
+        file_pattern = os.path.join(path, f'Attention_Dis_{prompt_filename}_{model_used}_*')
         file_list = glob.glob(file_pattern)
 
         # Check if any files were found
@@ -2311,13 +2311,15 @@ def analyse_causality_prompt_existing(mt, model_name, dataset, lie_instruction_n
                     # dataset.loc[index, "prompt_orig"] = prompt_orig
                     # dataset.loc[index, "prompt_after"] = prompt_lie
 
-                    features = get_logits_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
+                    # features = get_logits_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
+                    features = get_attention_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
                     print("-->features", features)
                     dataset.loc[index, f"{model_name}_prompt_aie_orig"] = str(list(features.values()))
                     features['label'] = 0
                     data.append(features)
 
-                    features = get_logits_features(model, tokenizer, prompt_lie, intervene_token, selected_layers, selected_heads)
+                    # features = get_logits_features(model, tokenizer, prompt_lie, intervene_token, selected_layers, selected_heads)
+                    features = get_attention_features(model, tokenizer, prompt_lie, intervene_token, selected_layers, selected_heads)
                     dataset.loc[index, f"{model_name}_prompt_aie_after"] = str(list(features.values()))
                     features['label'] = 1
                     data.append(features)
@@ -2333,14 +2335,16 @@ def analyse_causality_prompt_existing(mt, model_name, dataset, lie_instruction_n
 
                         question = row['action']
                         prompt_orig = prepare_prompt_completion(temp, ["", question])
-                        features = get_logits_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
+                        # features = get_logits_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
+                        features = get_attention_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
                         print("-->features", features)
                         dataset.loc[index, f"{model_name}_prompt_aie_orig"] = str(list(features.values()))
                         features['label'] = 0
                         data.append(features)
 
                         prompt_toxic = prepare_prompt_completion(temp, [prompt_type, question])
-                        features = get_logits_features(model, tokenizer, prompt_toxic, intervene_token, selected_layers, selected_heads)
+                        # features = get_logits_features(model, tokenizer, prompt_toxic, intervene_token, selected_layers, selected_heads)
+                        features = get_attention_features(model, tokenizer, prompt_toxic, intervene_token, selected_layers, selected_heads)
                         dataset.loc[index, f"{model_name}_prompt_aie_after"] = str(list(features.values()))
                         features['label'] = 1
                         data.append(features)
@@ -2352,7 +2356,8 @@ def analyse_causality_prompt_existing(mt, model_name, dataset, lie_instruction_n
                     choice = row['choices']
                     is_correct = row[f"{model_name}_is_correct"]
                     prompt = prepare_prompt_choice(question, choice)
-                    features = get_logits_features(model, tokenizer, prompt, intervene_token, selected_layers, selected_heads)
+                    # features = get_logits_features(model, tokenizer, prompt, intervene_token, selected_layers, selected_heads)
+                    features = get_attention_features(model, tokenizer, prompt, intervene_token, selected_layers, selected_heads)
                     dataset.loc[index, f"{model_name}_prompt_aie"] = str(list(features.values()))
                     if is_correct == True:
                         label = 1
@@ -2375,7 +2380,7 @@ def analyse_causality_prompt_existing(mt, model_name, dataset, lie_instruction_n
             increment = 1
             now = datetime.datetime.now()
             timestamp = now.strftime("%b_%d_%H%M")
-            filename = f'Logits_Diff_{dataset_name}_{model_used}'
+            filename = f'Attention_Dis_{dataset_name}_{model_used}'
 
             full_path = path + filename
             print("-->full_path", full_path)
@@ -2453,7 +2458,35 @@ if __name__ == '__main__':
 
     # Load the parameters
     parameters = load_parameters(json_file_path)
-    print("-->parameters", parameters)
+    # print("-->parameters", parameters)
+
+    import argparse
+    # Create the parser
+    parser = argparse.ArgumentParser(description='Process some parameters.')
+    # Add command-line arguments
+    parser.add_argument('--dataset', type=str, help='The dataset name')
+    parser.add_argument('--task', type=str, dest='task', help='The model name')
+    parser.add_argument('--model_path', type=str, dest='model_path', help='The model path')
+    parser.add_argument('--model_name', type=str, dest='model_name', help='The model name')
+    parser.add_argument('--saving_dir', type=str, dest='saving_dir', help='The model name')
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Access and update parameters with the provided command-line values
+    if args.model_path:
+        parameters["model_path"] = args.model_path
+    if args.model_name:
+        parameters["model_name"] = args.model_name
+    if args.dataset:
+        parameters["dataset"] = args.dataset
+    if args.saving_dir:
+        parameters["saving_dir"] = args.saving_dir
+    if args.task:
+        parameters["task"] = args.task
+
+    # Print the updated parameters
+    print("-->Updated parameters:", parameters)
 
     # Access the parameters
     model_path = parameters['model_path']
