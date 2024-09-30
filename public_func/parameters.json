@@ -1,10 +1,10 @@
 {
 "model_path": "meta-llama/",
 "model_name": "Llama-2-7b-chat-hf",
-      "task": "lie",
+      "task": "jailbreak",
       "if_causality_analysis": false,
       "if_detect": false,
-      "dataset": "Questions1000()",
+      "dataset": "GCG()",
       "target": "layer",
-      "saving_dir": "outputs_lie/llama-2-7b/"
+      "saving_dir": "outputs_jailbreak/llama-2-7b/"
 }

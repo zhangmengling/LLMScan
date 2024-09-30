@@ -114,7 +114,7 @@ print("-->null_num", null_num)
 '''
 
 # ------------------- bias -------------------
-# '''
+'''
 base_dataset = BBQ(category='race')
 base_model_name = "Llama-2-7b-chat-hf"
 # base_model_name = "Llama-2-13b-chat-hf"
@@ -165,7 +165,7 @@ def save_to_json(dataset, saving_file_name):
 # save_to_json(dataset, saving_file_name)  
 # dataset.to_json(saving_file_name, orient='records', lines=True)
 print("-->null_num", null_num)
-# '''
+'''
 
 # ------------------- toxic -------------------
 '''
@@ -285,3 +285,61 @@ save_to_json(dataset, saving_file_name)
 # dataset.to_json(saving_file_name, orient='records', lines=True)
 print("-->null_num", null_num)
 '''
+
+
+base_dataset = PAP()
+base_model_name = "Llama-2-7b-chat-hf"
+# base_model_name = "Llama-2-13b-chat-hf"
+# base_model_name = "Meta-Llama-3.1-8B-Instruct"
+# base_model_name = "Mistral-7B-Instruct-v0.2"
+
+print("-->base_dataset.columns", base_dataset.columns)
+
+dataset_name = "AutoDAN"
+task = 'Jailbreak'
+model_name = "LlaMa2-7B"
+# model_name = "LlaMa2-13B"
+# model_name = "LlaMa3_1-8B"
+# model_name = "Mistral-7B"
+
+path_name = f"prompt_intervention/jailbreak_results/"
+file_name = f"{task}_{dataset_name}_{model_name}.json"
+saving_file_name = "data/processed_questions/combined_dataset/" + f"{task}_{dataset_name}_{base_model_name}.json"
+print(saving_file_name)
+
+data_list = []
+with open(path_name + file_name, 'r') as file:
+        for line in file:
+            data = json.loads(line.strip())
+            data_list.append(data) 
+dataset = pd.DataFrame(data_list)  
+
+null_num = 0
+for index, row in base_dataset.iterrows():
+    question = row['questions']
+    layer_aie = row[f"{base_model_name}_layer_aie"]
+
+    # matching_rows = dataset['prompt'].str.contains(question, na=False)
+    matching_rows = dataset['prompt'] == question
+
+    true_indices = matching_rows[matching_rows].index.tolist()
+    print("-->true_indices", true_indices)
+
+    for i in true_indices:
+        # if layer_aie == None:
+        #     null_num += 1
+        #     continue
+        prompt_aie = [dataset.iloc[i]['mean']] +  [dataset.iloc[i]['std']] +[dataset.iloc[i]['range']] + [dataset.iloc[i]['kurtosis']] + [dataset.iloc[i]['skewness']]
+        base_dataset.loc[index, f'{base_model_name}_prompt_aie'] = str(prompt_aie)
+        # dataset.loc[i, 'layer_aie'] = str(layer_aie)
+        # dataset.loc[i, 'x'] = str(eval(layer_aie) + [dataset.iloc[i]['mean']] + \
+        #             [dataset.iloc[i]['std']] +[dataset.iloc[i]['range']] + \
+        #             [dataset.iloc[i]['kurtosis']] + [dataset.iloc[i]['skewness']])
+
+def save_to_json(dataset, saving_file_name):
+     dict = dataset.to_dict()
+     with open(saving_file_name, 'w') as file:
+        json.dump(dict, file)
+
+complete_filename = "data/processed_questions/AutoDAN_test.json"
+base_dataset.save_processed(None)

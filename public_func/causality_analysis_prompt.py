@@ -65,7 +65,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 from scipy.stats import kurtosis, skew
 from scipy.spatial import distance
 import glob
-
+import time
 
 template_name = 'llama-2'
 conv_template = load_conversation_template(template_name)
@@ -1826,6 +1826,8 @@ def get_attention_features(model, tokenizer, prompt, intervene_token, selected_l
     outputs = model(**inputs, output_attentions=True)
     original_attentions = []
 
+    intervene_token_id = tokenizer(intervene_token)['input_ids'][0]
+
     # Collect attention for the original prompt
     for layer_idx in selected_layers:
         for head_idx in selected_heads:
@@ -1836,10 +1838,11 @@ def get_attention_features(model, tokenizer, prompt, intervene_token, selected_l
     #attention_details = {'prompt': prompt, 'details': []}  # To store attention details for saving to JSON
     euclidean_dists = []
 
-    intervene_token_id = tokenizer(intervene_token)['input_ids'][0]
-
     # Iterate over each token in the input
+    print("-->token num", inputs['input_ids'].size(1))
+    start_time = time.time()
     for i in range(inputs['input_ids'].size(1)):
+        single_start_time = time.time()
         original_token = inputs['input_ids'][0, i].item()
         inputs['input_ids'][0, i] = intervene_token_id
         outputs = model(**inputs, output_attentions=True)
@@ -1854,13 +1857,17 @@ def get_attention_features(model, tokenizer, prompt, intervene_token, selected_l
         intervened_vector = np.concatenate(intervened_attentions)
         dist = distance.euclidean(original_vector, intervened_vector)
         euclidean_dists.append(dist)
+        single_end_time = time.time()
+        # print("-->time for calculating single token ce", single_end_time - single_start_time)
+
         '''
         attention_details['details'].append({
             'token_index': i,
             'intervened_vector': intervened_vector.tolist()
         })
         '''
-        
+    end_time = time.time()
+    print("-->time for generating prompt ce", end_time - start_time)
     features = extract_features(euclidean_dists)
 
     return features#, attention_details  # Separate return of features and raw attention data
@@ -2258,6 +2265,7 @@ def analyse_causality_prompt_existing(mt, model_name, dataset, lie_instruction_n
         file_pattern = os.path.join(path, f'Attention_Dis_{prompt_filename}_{model_used}_*')
         file_list = glob.glob(file_pattern)
 
+        file_list = []
         # Check if any files were found
         if len(file_list) != 0:
             # ------------------------------ extract x  ------------------------------ 
@@ -2312,14 +2320,20 @@ def analyse_causality_prompt_existing(mt, model_name, dataset, lie_instruction_n
                     # dataset.loc[index, "prompt_after"] = prompt_lie
 
                     # features = get_logits_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
+                    get_feature_start_time = time.time()
                     features = get_attention_features(model, tokenizer, prompt_orig, intervene_token, selected_layers, selected_heads)
+                    get_feature_end_time = time.time()
+                    print("-->time for running get_attention_features", get_feature_end_time - get_feature_start_time)
                     print("-->features", features)
                     dataset.loc[index, f"{model_name}_prompt_aie_orig"] = str(list(features.values()))
                     features['label'] = 0
                     data.append(features)
 
                     # features = get_logits_features(model, tokenizer, prompt_lie, intervene_token, selected_layers, selected_heads)
+                    get_feature_start_time = time.time()
                     features = get_attention_features(model, tokenizer, prompt_lie, intervene_token, selected_layers, selected_heads)
+                    get_feature_end_time = time.time()
+                    print("-->time for running get_attention_features", get_feature_end_time - get_feature_start_time)
                     dataset.loc[index, f"{model_name}_prompt_aie_after"] = str(list(features.values()))
                     features['label'] = 1
                     data.append(features)
@@ -2360,6 +2374,19 @@ def analyse_causality_prompt_existing(mt, model_name, dataset, lie_instruction_n
                     features = get_attention_features(model, tokenizer, prompt, intervene_token, selected_layers, selected_heads)
                     dataset.loc[index, f"{model_name}_prompt_aie"] = str(list(features.values()))
                     if is_correct == True:
+                        label = 1
+                    else:
+                        label = 0
+                    features['label'] = label
+                    data.append(features)
+            elif task == 'jailbreak':
+                for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0]):
+                    question = row['questions']
+                    label = row['label']
+                    prompt = prepare_prompt(question)
+                    features = get_attention_features(model, tokenizer, prompt, intervene_token, selected_layers, selected_heads)
+                    dataset.loc[index, f"{model_name}_prompt_aie"] = str(list(features.values()))
+                    if label == 'adv_data':
                         label = 1
                     else:
                         label = 0
@@ -2513,7 +2540,7 @@ if __name__ == '__main__':
     mt = ModelAndTokenizer(
         model_path + model_name,
         low_cpu_mem_usage=True,
-        torch_dtype=(torch.float16 if "13b" in model_name else None),
+        # torch_dtype=(torch.float16 if "13b" in model_name else None),
         device='cuda:0'
     )
     mt.model
@@ -2558,43 +2585,6 @@ if __name__ == '__main__':
 
         analyse_causality_prompt_existing(mt, model_name, dataset, 'random', task, save_progress=True)
 
-        if if_causality_analysis:
-            if os.path.exists(dataset.complete_filename):
-                print("-->dataset.complete_dataset", dataset.complete_filename)
-            else:
-                raise Exception(f"dataset.complete_dataset not exist")
-            analyse_causality_lie(dataset, mt, model_name, saving_dir, lie_instruction_num='random', save_progress=True, if_plot=False, target=target)
-        if if_detect: 
-            # -------------------- train & evaluate detector --------------------
-            dataset = eval(parameters['dataset'])
-            train_df, test_df = train_test_split(dataset, test_size=0.3, random_state=1)  # Ensures reproducibility
-            print("Training set size:", len(train_df))
-            print("Testing set size:", len(test_df))
-            train_dataset = dataset.reset_df(train_df)
-            dataset = eval(parameters['dataset'])
-            test_dataset = dataset.reset_df(test_df)
-            print("train_dataset:", len(train_dataset))
-            print("test_dataset:", len(test_dataset))
-
-            # print("train_dataset can_answer", train_dataset[f"{model_name}_can_answer"])
-            # print("train_dataset can_answer_after", train_dataset[f"{model_name}_can_answer_after"])
-
-            # save_dir = "outputs/llama-2-7b/lie-detector/" + dataset_name + "_balance/"
-            detector_saving_dir = saving_dir + "lie-detector/" + dataset_name + "/"
-            if not os.path.exists(detector_saving_dir):
-                os.makedirs(detector_saving_dir)
-            logistic_model_aie, linear_model_aie, mlp_regressor, mlp_classifier = train_detector(train_dataset,
-                                                                                                 model_name,
-                                                                                                 task, 
-                                                                                                 save_dir=None,  # save_dir=detector_saving_dir,
-                                                                                                 target=target,
-                                                                                                 lie_instruction_num='random')
-            # testing
-            evaluate_detector_all(dataset=test_dataset, model_name=model_name, task=task,
-                                  logistic_model_aie=logistic_model_aie, linear_model_aie=linear_model_aie,
-                                  mlp_regressor=mlp_regressor, mlp_classifier=mlp_classifier,
-                                  target=target, lie_instruction_num='random')
-        
     # ======================================== Bias detection task ========================================
     elif task == 'bias':
         # category = "gender"
@@ -2616,49 +2606,8 @@ if __name__ == '__main__':
         
         # get_prompts_bias(dataset=dataset, mt=mt, model_name=model_name, saving_dir=saving_dir, save_progress=True, if_plot=True, target=target)
         analyse_causality_prompt_existing(mt, model_name, dataset, 'random', task, save_progress=True)
-
-        if if_causality_analysis: 
-            # saving_dir = "outputs_bias/llama-2-7b/"
-            # analyse_causality_bias(dataset=dataset, mt=mt, model_name=model_name, saving_dir=saving_dir,
-            #                              save_progress=True, target='neuron', analyse_layer=9)
-            analyse_causality_bias(dataset=dataset, mt=mt, model_name=model_name, saving_dir=saving_dir, save_progress=True, if_plot=True, target=target)
-        
-        if if_detect:
-            # -------------------- train & evaluate detector --------------------
-            dataset = eval(parameters['dataset'])
-            train_df, test_df = train_test_split(dataset, test_size=0.3, random_state=1)  # Ensures reproducibility
-            print("Training set size:", len(train_df))
-            print("Testing set size:", len(test_df))
-            train_dataset = dataset.reset_df(train_df)
-            dataset = eval(parameters['dataset'])
-            test_dataset = dataset.reset_df(test_df)
-            print("train_dataset:", len(train_dataset))
-            print("test_dataset:", len(test_dataset))
-
-            detector_saving_dir = saving_dir + "bias-detector/" + dataset_name + "_" + category + "/"
-            if not os.path.exists(detector_saving_dir):
-                os.makedirs(detector_saving_dir)
-            # training
-            logistic_model_aie, linear_model_aie, mlp_regressor, mlp_classifier = train_detector(train_dataset,
-                                                                                                 model_name,
-                                                                                                 task, 
-                                                                                                 save_dir=detector_saving_dir,
-                                                                                                 target=target)
-            # testing
-            evaluate_detector_all(dataset=test_dataset, model_name=model_name, task=task, 
-                                  logistic_model_aie=logistic_model_aie, linear_model_aie=linear_model_aie,
-                                  mlp_regressor=mlp_regressor, mlp_classifier=mlp_classifier,
-                                  target=target)
     # ======================================== Toxic detection task ========================================
     elif task == 'toxic':
-
-        # file_name = "/common/home/users/m/mengdizhang/LLM_probing_Causality/lllm/../data/processed_questions/TrustGPT/social-chem-101_1w.json"
-        # with open(file_name, "r") as f:
-        #     data = json.load(f)
-        # dataset = pd.DataFrame(data)
-        # print(dataset.columns)
-        # sys.exit()
-
 
         mp.set_start_method('spawn', force=True)
         dataset = eval(parameters['dataset'])
@@ -2669,83 +2618,14 @@ if __name__ == '__main__':
 
         # get_prompts_toxic(dataset=dataset, mt=mt, model_name=model_name, saving_dir=saving_dir, suffix=None, save_progress=True, if_plot=True, target='layer')
         analyse_causality_prompt_existing(mt, model_name, dataset, 'random', task, save_progress=True)
-
-        if if_causality_analysis:
-            analyse_causality_toxic(dataset=dataset, mt=mt, model_name=model_name, saving_dir=saving_dir, suffix=None, save_progress=True, if_plot=True, target='layer')
-            # datasets = [
-            #     "TrustGPT/social-chem-101_3w_1"
-            # ]
-            # processes = []
-            # # for processed_filename in datasets:
-            # for index, processed_filename in enumerate(datasets):
-            #     index = 1
-            #     p = mp.Process(target=run_analysis, args=(processed_filename, mt, model_name, saving_dir, index))
-            #     p.start()
-            #     processes.append(p)
-            #
-            # for p in processes:
-            #     p.join()
-        if if_detect:
-            # -------------------- train & evaluate detector --------------------
-            dataset = eval(parameters['dataset'])
-            train_df, test_df = train_test_split(dataset, test_size=0.3, random_state=1)  # Ensures reproducibility
-            print("Training set size:", len(train_df))
-            print("Testing set size:", len(test_df))
-            train_dataset = dataset.reset_df(train_df)
-            dataset = eval(parameters['dataset'])
-            test_dataset = dataset.reset_df(test_df)
-            print("train_dataset:", len(train_dataset))
-            print("test_dataset:", len(test_dataset))
-
-            detector_saving_dir = saving_dir + "toxic-detector/" + dataset_name + "/"
-            if not os.path.exists(detector_saving_dir):
-                os.makedirs(detector_saving_dir)
-            # training
-            logistic_model_aie, linear_model_aie, mlp_regressor, mlp_classifier = train_detector(train_dataset,
-                                                                                                 model_name,
-                                                                                                 task,
-                                                                                                 save_dir=detector_saving_dir,
-                                                                                                 target=target)
-            # testing
-            evaluate_detector_all(dataset=test_dataset, model_name=model_name, task=task,
-                                  logistic_model_aie=logistic_model_aie, linear_model_aie=linear_model_aie,
-                                  mlp_regressor=mlp_regressor, mlp_classifier=mlp_classifier,
-                                  target=target)
     # ------------------------------------------ Jailbreak detection task -------------------------------------------
     elif task == 'jailbreak':
-        # dataset = AutoDAN()
         dataset = eval(parameters['dataset'])
         print("-->dataset num:", len(dataset), len(dataset.columns))
         dataset_name = dataset.__class__.__name__
         # print("-->dataset.columns", dataset.columns)
         print("-->if_causality_analysis", if_causality_analysis)
 
-        if if_causality_analysis:
-            # saving_dir = "outputs_jailbreak/llama-2-7b/"
-            analyse_causality_jailbreak(dataset, mt, model_name, saving_dir, save_progress=True, if_plot=True, target='layer')
-        if if_detect:
-            # -------------------- train & evaluate detector --------------------
-            dataset = eval(parameters['dataset'])
-            train_df, test_df = train_test_split(dataset, test_size=0.3, random_state=1)  # Ensures reproducibility
-            print("Training set size:", len(train_df))
-            print("Testing set size:", len(test_df))
-            train_dataset = dataset.reset_df(train_df)
-            dataset = eval(parameters['dataset'])
-            test_dataset = dataset.reset_df(test_df)
-            print("train_dataset:", len(train_dataset))
-            print("test_dataset:", len(test_dataset))
+        analyse_causality_prompt_existing(mt, model_name, dataset, 'random', task, save_progress=True)
 
-            detector_saving_dir = saving_dir + "jailbreak-detector/" + dataset_name + "/"
-            if not os.path.exists(detector_saving_dir):
-                os.makedirs(detector_saving_dir)
-            logistic_model_aie, linear_model_aie, mlp_regressor, mlp_classifier = train_detector(train_dataset,
-                                                                                                 model_name,
-                                                                                                 task, 
-                                                                                                 save_dir=detector_saving_dir,
-                                                                                                 target=target)
-            # testing
-            evaluate_detector_all(dataset=test_dataset, model_name=model_name, task=task,
-                                  logistic_model_aie=logistic_model_aie, linear_model_aie=linear_model_aie,
-                                  mlp_regressor=mlp_regressor, mlp_classifier=mlp_classifier,
-                                  target=target)
 

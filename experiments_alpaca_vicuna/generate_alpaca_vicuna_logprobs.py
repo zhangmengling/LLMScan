@@ -46,13 +46,14 @@ parser = argparse.ArgumentParser()
 # model_path = "meta-llama/"
 # model_name = "Llama-2-13b-chat-hf"
 
-'''
-model_path = "meta-llama/"
-model_name = "Meta-Llama-3.1-8B-Instruct"
+# ------------------------------------------- Generating x_train -------------------------------------------
+# '''
+# model_path = "meta-llama/"
+# model_name = "Meta-Llama-3.1-8B-Instruct"
 # model_name = "Llama-2-13b-chat-hf"
 
-# model_path = "mistralai/"
-# model_name = "Mistral-7B-Instruct-v0.2"
+model_path = "mistralai/"
+model_name = "Mistral-7B-Instruct-v0.2"
 
 model = model_name
 
@@ -72,15 +73,15 @@ for dataset in datasets:
         max_questions_to_try=None,
         model_suspect=model,
         model_kwargs_suspect={"endpoint": llama_endpoint, "max_tokens": 64, "stop": "\n"},
-        save_progress=True,
+        save_progress=False,
         append_results_to_existing_ones=False  # False: overwrite them
     )
 
 print("GENERATE_ALPACA_VICUNA_LOGPROBS COMPLETED CORRECTLY")
-'''
-
-
 # '''
+
+# ------------------------------------------- Detecting -------------------------------------------
+'''
 model_name = "Llama-2-13b-chat-hf"
 model_name = "Meta-Llama-3.1-8B-Instruct"
 # model_name = "Mistral-7B-Instruct-v0.2"
@@ -182,4 +183,4 @@ for binary in [False, True]:
 
 print(classification_results_df[["model", "binary", "subset", "accuracy", "auc"]])
 
-# '''
+'''

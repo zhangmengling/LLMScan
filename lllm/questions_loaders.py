@@ -26,6 +26,7 @@ from utils.utils import *
 import random
 random.seed(0)
 
+import time
 
 YES_TOKENS = set(["yes", "absolutely", "certainly", "undoubtedly"])
 NO_TOKENS = set(["no", "never"])
@@ -1856,6 +1857,7 @@ class QuestionsLoader(DataFrame, ABC):
                 # there must be a better way to do this... Think more about it
                 continue
             '''
+            start_time = time.time()
 
             if use_previous_setup and self[f"{model_suspect}_probes_setup"].notna()[i]:
                 lie_instruction = self[f"{model_suspect}_probes_setup"][i]["lie_instruction"]
@@ -1879,7 +1881,11 @@ class QuestionsLoader(DataFrame, ABC):
             # print("-->lie_instruction", lie_instruction)
             print("-->provide_lie", provide_lie)
             # produce now the lie transcript; there is also a way to check if the model is lying or not
-            false_statement = self[f"{model_suspect}_false_statement"][i]
+            try:
+                false_statement = self[f"{model_suspect}_false_statement"][i]
+            except:
+                false_statement = self["false_statement"][i]
+
             # prompt = (
             #         lie_instruction
             #         + (
@@ -1922,6 +1928,8 @@ class QuestionsLoader(DataFrame, ABC):
                 model_kwargs_suspect=model_kwargs_suspect,
             )
             print("-->prob_differences_lie", prob_differences_lie)
+            end_time = time.time()
+            print("-->time for running one prompt", end_time - start_time)
 
             # if the model did not lie, the transcript would be empty:
             if prob_differences_lie is not None:

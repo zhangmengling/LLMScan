@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.patches as mpatches
 import json
 import os 
+from lllm.questions_loaders import WikiData
 
 
 def plot_causal_effect(dataset_name, saving_file_name, aie_values, kurt_value=None, analyse_layer=None, target='layer'):
@@ -74,19 +75,46 @@ def get_y1_y2(model_name, dataset_name, task):
         y2 = data[dataset_name]['average_AIE_stereotype']
         return y1, y2
 
+'''
+dataset = WikiData()
+print("-->columns", list(dataset.columns))
+model_name = "Mistral-7B-Instruct-v0.2"
 
+print(dataset["Mistral-7B-Instruct-v0.2_layer_aie_orig"])
 
-dataset_name = "MathematicalProblems"
-task = 'lie'
+import ast
 
-dataset_name = "GCG"
-task = 'jailbreak'
+layer_aie_orig = []
+layer_aie_after = []
+for index, row in dataset.iterrows():
+    
+    try:
+        layer_aie_orig.append(ast.literal_eval(row["Mistral-7B-Instruct-v0.2_layer_aie_orig"]))
+        layer_aie_after.append(ast.literal_eval(row["Mistral-7B-Instruct-v0.2_layer_aie_after"]))
+    except:
+        continue
 
-dataset_name = "SocialChem"
-task = 'toxic'
+print("-->length", len(layer_aie_orig), layer_aie_orig[0], type(layer_aie_orig[0]))
+# average_layer_aie_orig = [int(sum(items) / len(items)) for items in zip(*layer_aie_orig)]
+# average_layer_aie_after = [int(sum(items) / len(items)) for items in zip(*layer_aie_after)]
+average_layer_aie_orig = [sum(items) / len(items) for items in zip(*layer_aie_orig)]
+average_layer_aie_after = [sum(items) / len(items) for items in zip(*layer_aie_after)]
 
-# dataset_name = "BBQ_gender"
-# task = 'bias'
+print("-->average_layer_aie_orig", average_layer_aie_orig)
+print("-->average_layer_aie_after", average_layer_aie_after)
+'''
+
+# dataset_name = "MathematicalProblems"
+# task = 'lie'
+
+# dataset_name = "PAP"
+# task = 'jailbreak'
+
+# dataset_name = "SocialChem"
+# task = 'toxic'
+
+dataset_name = "BBQ_sexual_orientation"
+task = 'bias'
 
 #llama-2-7b
 model_name = "llama-2-7b"
@@ -104,14 +132,14 @@ y7, y8 = get_y1_y2(model_name, dataset_name, task)
 
 df_labeled = pd.DataFrame({
     'Value': np.concatenate([y1, y2, y3, y4, y5, y6, y7, y8]),
-    'Response': (['llama-2-7b Truth Response'] * len(y1) + 
-                 ['llama-2-7b Lie Response'] * len(y2) +
-                 ['llama-2-13b Truth Response'] * len(y3) + 
-                 ['llama-2-13b Lie Response'] * len(y4) +
-                 ['llama-3.1 Truth Response'] * len(y5) + 
-                 ['llama-3.1 Lie Response'] * len(y6) +
-                 ['Mistral Truth Response'] * len(y7) + 
-                 ['Mistral Lie Response'] * len(y8))
+    'Response': (['llama-2-7b Truth '] * len(y1) + 
+                 ['llama-2-7b Lie '] * len(y2) +
+                 ['llama-2-13b Truth '] * len(y3) + 
+                 ['llama-2-13b Lie '] * len(y4) +
+                 ['llama-3.1 Truth '] * len(y5) + 
+                 ['llama-3.1 Lie '] * len(y6) +
+                 ['Mistral Truth '] * len(y7) + 
+                 ['Mistral Lie '] * len(y8))
 })
 
 # 全局字体设置
@@ -148,11 +176,10 @@ lie_patch = mpatches.Patch(color='#F7AB68', label=label2)  # F2AA84,  F7AB68
 plt.legend(handles=[truth_patch, lie_patch], title='Response Type')
 
 plt.tight_layout()
-plt.savefig('fig_' + dataset_name + '.pdf')
+plt.savefig('fig_violin/fig_' + dataset_name + '.pdf')
 
 # saving_path = "./fig_"
 # saving_file_name = saving_path + dataset_name + "_nonadv.pdf"
 # plot_causal_effect(dataset_name, saving_file_name, y1, 0 , analyse_layer=None, target='layer')
 # saving_file_name = saving_path + dataset_name + "_adv.pdf"
 # plot_causal_effect(dataset_name, saving_file_name, y2, 0 , analyse_layer=None, target='layer')
-

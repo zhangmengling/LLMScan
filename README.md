@@ -1,25 +1,63 @@
-# LLM Lie Detection based on Causality Analysis. 
-This repository is to detect LLM's lie behavior based on causality analysis. 
-This repository contains code from paper "[How to catch an AI liar: Lie detection in black-box LLMs by asking unrelated questions](https://arxiv.org/abs/2309.15840)" with [GitHub link](https://github.com/LoryPack/LLM-LieDetector.git) and paper "[CASPER: Causality Analysis for Evaluating the Security of Large Language Models](https://arxiv.org/abs/2312.07876)" with [GitHub link](https://github.com/casperllm/CASPER.git) for refernece. 
+# LLMScan: Causal Scan for LLM Misbehavior Detection 
+This repository is to scan LLM's "brain" and detect LLM's misbehavior based on causality analysis. 
 
-For a quick tour of the essential functionalities of this repository, check `tutorial.ipynb`.
+## Abstract
+
+Despite the success of Large Language Models (LLMs) across various fields, their potential to generate untruthful, biased and harmful responses poses significant risks, particularly in critical applications. This highlights the urgent need for systematic methods to detect and prevent such misbehavior. While existing approaches target specific issues such as harmful responses, this work introduces LLMScan, an innovative LLM monitoring technique based on causality analysis, offering a comprehensive solution.LLMScan systematically monitors the inner workings of an LLM through the lens of causal inference, operating on the premise that the LLM's `brain' behaves differently when misbehaving. By analyzing the causal contributions of the LLM's input tokens and transformer layers, LLMScan effectively detects misbehavior. Extensive experiments across various tasks and models reveal clear distinctions in the causal distributions between normal behavior and misbehavior, enabling the development of accurate, lightweight detectors for a variety of misbehavior detection tasks.
 
 ## Structure of this repository:
-###  For generating lies from language models:
 
-- `data` contains the Q/A datasets which are used to generate lies. These are a set of 10 existing dataset plus one which we introduce. `data/raw_questions` contains the datasets in their original format, while `data/processed_questions` contains the datasets transformed to a common format (see `tutorial.ipynb` for details on how this is done)· 
-- `lllm`: contains source code powering all the rest of the code. In particular, `questions_loader.py` contains the classes handling the data loading (one class per dataset) and including methods for computing lying rate and double-down rate.
-- `lying_rate_double_down_rate_probes.ipynb` prompts GPT-3.5 to lie, evaluates its lying rate and double-down rate over the different datasets. 
-- `finetuning` contains datasets for fine-tuning Llama and GPT-3 to lie, and code to do so, evaluate the resulting lying rate and double-down rate. See `finetuning/README.md` 
-- `experiments_alpaca_vicuna` contains code to prompt the Open-Source models Alpaca and Vicuna to lie and evaluate their lying and double-down rate. See `experiments_alpaca_vicuna/README.md` for more details. 
+- `data` contains the raw datasets and processed dataset with CE informations for 4 detection tasks. `data/raw_questions` contains the datasets in their original format, while `data/processed_questions` contains the datasets transformed to a common format. (the dataset loading code is at file lllm/questions_loaders.py)
+- `lllm`, `utils`: contains source code. 
+- `public_fun`: contains the source code running LLMScan (CE generation and detector trianing/evaluation). In specifically, `public_fun/causality_analysis.py` contains the code for scanning model layers and generating layer-level causal effects, `public_fun/causality_analysis.py` contains the code for generating model token-level causal effects and the detector training is executed at `public_fun/causality_analysis_combine.py` which contains the code for training, evaluating our LLMScan detectors. 
+- `figs`: all analyzing figures, e.g., PCA, Violin Figures and Causal Maps
 
-### For training and testing the lie detectors
-- `lllm/questions_loader.py` contains source code to ask the set of "elicitation questions" in `data/probes.csv` after a model was suspected to have lied. This relies on the classes defined in `dialogue_classes.py`
-- `lying_rate_double_down_rate_probes.ipynb` asks these elicitation questions to GPT-3.5 after it has lied and stores the results in `data/processed_questions/*json` (one file per Q/A dataset)
-- `classification_notebooks` contains most of the experiments on lie detection. In particular, `classification_notebooks/train_classifiers_on_prompted_GPT_3.5.ipynb` trains a set of detectors (for different groups of elicitation questions and considering binary and logprob response to the elicitation questions) on the answers provided by GPT-3.5, which are then tested in other experiments. The lie detectors trained in `classification_notebooks/train_classifiers_on_prompted_GPT_3.5.ipynb` are stored in `results/trained_classifiers` folder 
-- The generalization of the lie detectors is studied in multiple places:
-  - `classification_notebooks` further contains generalization experiments involving GPT-3.5; see details in `classification_notebooks/README.md`. Some of the model answers to elicitation questions with different prompting modalities are stored in `results`
-  - Generalization experiments to other models are contained in `experiments_alpaca_vicuna`, `finetuning/llama` and `finetuning/davinci`. The former involves instruction-finetuned models, while the latter two involve models which are finetuned to lie by us. See the `README.md` file in those folders for more details. Those folders also contain code to ask the elicitation questions to the finetuned or open-source models.
+`public_fun/paramters.json`
+
+## Setup
+
+The code was developed with Python 3.8. To install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+## Model
+All pre-trained models are loaded from HuggingFace.
+```bash
+# llama-2-7b
+"model_path": "meta-llama/",
+"model_name": "Llama-2-7b-chat-hf"
+
+# llama-2-13b
+"model_path": "meta-llama/",
+"model_name": "Llama-2-13b-chat-hf"
+
+# llama-3.1
+"model_path": "meta-llama/",
+"model_name": "Meta-Llama-3.1-8B-Instruct"
+
+# Mistral
+"model_path": "mistralai/",
+"model_name": "Mistral-7B-Instruct-v0.2"
+```
+
+## Example Experiment
+```bash
+# generating layer-level ce (remember to set the save_progress as True to save all causal effects results in processed_dataset files)
+python public_func/causality_analysis.py --model_path "meta-llama/" --model_name "Llama-2-7b-chat-hf" --task "lie" --dataset "Questions1000()" --saving_dir "outputs_lie/llama-2-7b/"
+# or you can directly run: 
+python public_func/causality_analysis.py   # then the parameters are loaded from file public/parameters.json
+
+# generating token-level ce 
+python public_func/causality_analysis_prompt.py
+
+# train and evaluate the detector
+python public_func/causality_analysis_combine.py
+```
+
+
+
+
 
 ### Other files:
 - `lllm` contains additional utilities that are used throughout.
@@ -32,6 +70,8 @@ For a quick tour of the essential functionalities of this repository, check `tut
 To use this code, create a clean `Python` environment and then run 
 
 ```pip install -r requirements.txt```
+```pip install -r requirements_casper.txt```
+
 
 To run experiments with the open-source models, you need access to a computing cluster with GPUs and to install the [`deepspeed_llama`](https://github.com/LoryPack/deepspeed_llama) repository on that cluster. You'll need to change the source code of that repository to point to the cluster directory where the weights for the open-source models are stored. `experiments_alpaca_vicuna` and `finetuning/llama` contain a few `*.sh` example scripts for clusters using `slurm`.
 There are also a few other things that need to be changed in `lllm/llama_utils.py` according to the paths of your cluster. Moreover, `finetuning/llama/llama_ft_folder.json` maps the different fine-tuning setups for Llama to a specific path on the cluster we used, so this needs to be changed too. 

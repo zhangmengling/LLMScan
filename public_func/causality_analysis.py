@@ -58,6 +58,7 @@ AnthropicAwarenessNNArchitecture, BBQ, SocialChem, InnodateBias, AutoDAN, GCG, P
 from bias_detection.TrustGPT.utils.metric.Toxicity import get_toxicity_value
 
 import multiprocessing as mp
+import time
 
 template_name = 'llama-2'
 conv_template = load_conversation_template(template_name)
@@ -279,12 +280,22 @@ def trace_with_patch_layer(
             short_cut = (short_cut_1, dynamic_cache)
             return short_cut
         
+    model_kwargs={
+                "temperature": 0,
+                "presence_penalty": 0,
+                "frequency_penalty": 0,
+                "max_tokens": 64,
+                "top_p": 1,
+            }
+    # time_one1 = time.time()
     with torch.no_grad(), nethook.TraceDict(
             model,
             layers,
             edit_output=patch_rep_update  # patch_rep / patch_rep_update
     ) as td:
         outputs_exp = model(**inp)
+    # time_one2 = time.time()
+    # print("-->time for intervening one layer", time_one2 - time_one1)
 
     # the logits of output when perturbing certain layer
     probs = torch.softmax(outputs_exp.logits[1:, -1, :], dim=1).mean(dim=0)[answers_t]
@@ -296,31 +307,31 @@ def analyse_based_on_layer(prompt, mt):
     """
     prompt:
     """
-    # predict_token(
-    # mt,
-    # [prompt],
-    # return_p=True,
-    # )
+    time1 = time.time()
     answer = generate_outputs(prompt, mt, )
     if isinstance(answer, list):
         answer = answer[0]
-    # print("-->answer", answer)
+    time2 = time.time()
+    print("-->answer", answer, len(answer))
+    print("-->time for answer one question", time2 - time1)
 
-    if "*out loud*" in answer:
-        select_answer = extract_new_prompt(answer)
-        prompt = prompt + select_answer
-        # print("-->new_prompt", prompt)
+    # if "*out loud*" in answer:
+    #     select_answer = extract_new_prompt(answer)
+    #     prompt = prompt + select_answer
 
+    model = mt.model
+    print("-->mt.num_layers", mt.num_layers)
+    time1 = time.time()
     inp = make_inputs(mt.tokenizer, [prompt] * 2)
     with torch.no_grad():
         asnwer_t, logits = [d[0] for d in predict_from_input(mt.model, inp)]
-    [first_token] = decode_tokens(mt.tokenizer, [asnwer_t])
+    # [first_token] = decode_tokens(mt.tokenizer, [asnwer_t])
     # print("-->first_token:", first_token)
 
     # '''
-    model = mt.model
+    # time1 = time.time()
     result_prob = []
-    for layer in range(10, mt.num_layers - 1): 
+    for layer in range(0, mt.num_layers - 1): 
         layers = [layername(model, layer), layername(model, layer + 1)]
         prob = trace_with_patch_layer(model, inp, layers, asnwer_t)
         result_prob.append(prob)
@@ -328,6 +339,9 @@ def analyse_based_on_layer(prompt, mt):
     data_on_cpu = [abs(x.item() - logits.item()) for x in result_prob]
     # Create a list of indices for x-axis
     # '''
+    time2 = time.time()
+    print("-->time for running inside analyse_based_one_layer", time2 - time1)
+
     return logits.item(), data_on_cpu, answer
 
 
@@ -499,7 +513,10 @@ def plot_multi_causal_effect(aie_values_orig, air_values_lie, kurt_value_orig, k
 
 
 def get_layerAIE_kurt(test_prompt, mt):
+    start_time = time.time()
     logits, layerAIE, answer = analyse_based_on_layer(test_prompt, mt)
+    end_time = time.time()
+    # print("-->time for running analyse_based_on_layer(prompt, mt) is ", end_time - start_time)
 
     seq = layerAIE
     logits = logits
@@ -1443,7 +1460,7 @@ def get_prompts_toxic(dataset, mt, model_name, saving_dir, suffix=None, save_pro
 
         dataset.save_processed(complete_filename)
 
-def analyse_causality_jailbreak(dataset, mt, model_name, saving_dir, save_progress=False, if_plot=True, target='layer', analyse_layer=None):
+def analyse_causality_jailbreak(dataset, mt, model_name, saving_dir, save_progress=False, if_plot=False, target='layer', analyse_layer=None):
     """
     --PARAMETERS--
     dataset: AutoDAN() which have group-truth answer label
@@ -1459,9 +1476,10 @@ def analyse_causality_jailbreak(dataset, mt, model_name, saving_dir, save_progre
     all_kurt_non_adv = []
     model_answers = []
 
-    # for k in tqdm(range(0, len(questions))):  # len(questions) or 100
-    # for index, row in tqdm(dataset.head(10).iterrows(), total=10):
-    for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0]):
+    print("-->dataset.shape", dataset.shape)
+
+    # for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0]):
+    for index, row in tqdm(dataset.head(10).iterrows(), total=10):
         question = row['questions']
         label = row['label']
         # question = str(questions[k])
@@ -1498,7 +1516,7 @@ def analyse_causality_jailbreak(dataset, mt, model_name, saving_dir, save_progre
             all_AIE_non_adv.append(AIE)
             all_kurt_non_adv.append(kurt)
 
-        dataset.loc[index, f"{model_name}_model_answers"] = answer
+        # dataset.loc[index, f"{model_name}_model_answers"] = answer
         if target == "neuron":
             dataset.loc[index, f"{model_name}_layer_{str(analyse_layer)}_neuron_aie"] = str(AIE)
         elif target == "layer":
@@ -1832,7 +1850,34 @@ if __name__ == '__main__':
 
     # Load the parameters
     parameters = load_parameters(json_file_path)
-    print("-->parameters", parameters)
+
+    import argparse
+    # Create the parser
+    parser = argparse.ArgumentParser(description='Process some parameters.')
+    # Add command-line arguments
+    parser.add_argument('--dataset', type=str, help='The dataset name')
+    parser.add_argument('--task', type=str, dest='task', help='The model name')
+    parser.add_argument('--model_path', type=str, dest='model_path', help='The model path')
+    parser.add_argument('--model_name', type=str, dest='model_name', help='The model name')
+    parser.add_argument('--saving_dir', type=str, dest='saving_dir', help='The model name')
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Access and update parameters with the provided command-line values
+    if args.model_path:
+        parameters["model_path"] = args.model_path
+    if args.model_name:
+        parameters["model_name"] = args.model_name
+    if args.dataset:
+        parameters["dataset"] = args.dataset
+    if args.saving_dir:
+        parameters["saving_dir"] = args.saving_dir
+    if args.task:
+        parameters["task"] = args.task
+
+    # Print the updated parameters
+    print("-->Updated parameters:", parameters)
 
     # Access the parameters
     model_path = parameters['model_path']
@@ -1880,7 +1925,7 @@ if __name__ == '__main__':
     mt = ModelAndTokenizer(
         model_path + model_name,
         low_cpu_mem_usage=True,
-        torch_dtype=(torch.float16 if "13b" in model_name else None),
+        # torch_dtype=(torch.float16 if "13b" in model_name else None),
         device='cuda:0'
     )
     mt.model
@@ -2197,7 +2242,6 @@ if __name__ == '__main__':
                                   target=target)
     # ------------------------------------------ Jailbreak detection task -------------------------------------------
     elif task == 'jailbreak':
-        # dataset = AutoDAN()
         dataset = eval(parameters['dataset'])
         print("-->dataset num:", len(dataset), len(dataset.columns))
         dataset_name = dataset.__class__.__name__
@@ -2205,7 +2249,7 @@ if __name__ == '__main__':
 
         if if_causality_analysis:
             # saving_dir = "outputs_jailbreak/llama-2-7b/"
-            analyse_causality_jailbreak(dataset, mt, model_name, saving_dir, save_progress=True, if_plot=True, target='layer')
+            analyse_causality_jailbreak(dataset, mt, model_name, saving_dir, save_progress=False, if_plot=False, target='layer')
         if if_detect:
             # -------------------- train & evaluate detector --------------------
             dataset = eval(parameters['dataset'])
